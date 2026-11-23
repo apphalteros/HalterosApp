@@ -773,7 +773,7 @@ function modalBody(){const m=S.modal,v=m.v;
   <label>Descripción</label><input value="${esc(v.desc)}" oninput="S.modal.v.desc=this.value">
   <label>Estado</label><div class="seg"><button class="${v.active?'on':''}" onclick="S.modal.v.active=true;renderModal()">Disponible</button><button class="${!v.active?'on':''}" onclick="S.modal.v.active=false;renderModal()">Agotado</button></div>
   <div class="row" style="margin-top:16px"><button class="btn f1" onclick="A.prodSave()">Guardar</button>${!v.isNew?`<button class="btn danger" onclick="A.prodDel()">${S.confirm==='dprod'?'¿Seguro?':'Eliminar'}</button>`:''}<button class="btn ghost" onclick="A.closeModal()">Cancelar</button></div>`;
- if(m.t==='img')return`<img src="${esc(v.src)}" style="width:100%;border-radius:10px"><button class="btn sec full" style="margin-top:10px" onclick="A.closeModal()">Cerrar</button>`;
+ if(m.t==='img')return`<img src="${esc(v.src)}" style="width:100%;border-radius:10px"><div class="row" style="gap:8px;margin-top:10px"><button class="btn f1" ${v.busy?'disabled':''} onclick="A.dlImg()">${v.busy?'⏳ Preparando…':'⬇️ Descargar imagen'}</button><button class="btn sec f1" onclick="A.closeModal()">Cerrar</button></div>`;
  return''}
 function prTxt(r,a){if(!a||!r.base)return r.name?'<span class="mut xs">Sin % asociado</span>':'';const rm=a.rms?.[r.base];if(r.kg&&rm){if(r.kg>rm&&(r.miss||0)<(r.sets||1))return`<span class="pill ok">🎉 Nuevo RM de ${EXN[r.base]} (antes ${fk(rm)})</span>`;return`<span class="mut xs">${Math.round(r.kg/rm*100)}% de tu RM de ${EXN[r.base]}</span>`}return`<span class="mut xs">Base: ${EXN[r.base]}</span>`}
 
@@ -790,7 +790,17 @@ A.tab=t=>{if(t==='rank')loadRank();S.tab=t;S.view=null;S.confirm=null;if(role()=
 A.open=(t,id)=>{S.view={t,id};S.confirm=null;S.sheetIdx=0;if(t==='athlete')watchLogs(id);render();scrollTo(0,0)};
 A.back=()=>{S.view=null;S.confirm=null;if(role()==='athlete')watchLogs(S.me.id);render();scrollTo(0,0)};
 A.toggleRole=()=>{S.viewAs=role()==='coach'?'athlete':null;S.view=null;S.tab=role()==='coach'?'team':'home';if(role()==='athlete'){S.tools.src='me';watchLogs(S.me.id)}else S.tools.src='manual';render();scrollTo(0,0)};
-A.zoom=(pid,i)=>openModal({t:'img',v:{src:srcOf(S.plans[pid].images[i])}});
+A.zoom=(pid,i)=>{const im=S.plans[pid].images[i];const p=S.plans[pid];openModal({t:'img',v:{src:srcOf(im),drive:im.drive||'',name:((p.title||'plani').replace(/[^\wáéíóúñÁÉÍÓÚÑ -]+/g,'').trim().replace(/\s+/g,'_')||'plani')+(p.images.length>1?'_'+(i+1):'')}})};
+/* descargar / guardar la imagen en el celular */
+A.dlImg=async()=>{const v=S.modal&&S.modal.v;if(!v)return;S.modal.v.busy=true;renderModal();
+ try{let blob;
+  if(v.drive){const r=await call('getVideo',{id:v.drive});const bin=atob(r.b64);const u8=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u8[i]=bin.charCodeAt(i);blob=new Blob([u8],{type:r.type||'image/jpeg'})}
+  else blob=await (await fetch(v.src)).blob();
+  const ext=(blob.type.split('/')[1]||'jpg').replace('jpeg','jpg');const file=new File([blob],(v.name||'imagen')+'.'+ext,{type:blob.type||'image/jpeg'});
+  if(navigator.canShare&&navigator.canShare({files:[file]})&&/iPhone|iPad|Android/i.test(navigator.userAgent)){await navigator.share({files:[file],title:v.name||'Plani'})}
+  else{const u=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u;a.download=file.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000);toast('Imagen descargada')}}
+ catch(e){if(e&&e.name==='AbortError'){}else{window.open(v.src,'_blank');toast('Mantén presionada la imagen y elige «Guardar imagen»')}}
+ if(S.modal&&S.modal.v)S.modal.v.busy=false;renderModal()};
 A.qcUpd=()=>{const el=$('#qcres');if(el){const a=role()==='coach'?S.athletes[S.previewAth]:myA();el.innerHTML=qcRes(a)}};
 A.toolUpd=()=>{const el=$('#toolres');if(el)el.innerHTML=toolRes()};
 A.prefill=()=>{const a=toolAth();if(a){S.tools.sn=a.rms?.arranque??'';S.tools.cj=a.rms?.envion??''}};
