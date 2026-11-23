@@ -1324,7 +1324,7 @@ function ocrToBlock(data){const W=[];(data.lines||[]).forEach((ln,li)=>(ln.words
   if(/^d[i1l]a$/.test(n)){const nx=W.find(v=>v.li===w.li&&v.x0>w.x1&&v.x0-w.x1<(w.x1-w.x0)*1.5&&/^\d$/.test(v.t));if(nx)H.push({n:+nx.t,cx:(w.x0+nx.x1)/2,y:Math.max(w.y1,nx.y1),li:w.li})}});
  const byN={};H.forEach(h=>{if(!byN[h.n]||h.y<byN[h.n].y)byN[h.n]=h});let hs=Object.values(byN).sort((a,b)=>a.cx-b.cx);
  // 2) si no se leen, usar filas repetidas por columna: N° sesión, calentamiento, estiramiento (alineadas a la izquierda)
- const KEYS=[/ses[i1l]/,/(calent|carent|camen|caent|cament|movil|moviu)/,/(stiram|smgam|smmam|smnam|ramient|estir)/];let anchors=null,topY=hs.length?Math.max(...hs.map(h=>h.y)):-1;
+ const KEYS=[/(ses[i1l]|seso?n$|sesion|sion:?$)/,/(calent|carent|camen|caent|cament|movil|moviu)/,/(stiram|smgam|smmam|smnam|ramient|estir)/];let anchors=null,topY=hs.length?Math.max(...hs.map(h=>h.y)):-1;
  KEYS.forEach((re,ki)=>{const g={};W.forEach(w=>{if(re.test(norm(w.t)))(g[w.li]=g[w.li]||[]).push(w)});Object.entries(g).forEach(([li,v])=>{v.sort((a,b)=>a.x0-b.x0);const xs=[],cs=[];v.forEach(w=>{if(!xs.length||w.x0-xs[xs.length-1]>40){xs.push(w.x0);cs.push(w.cx)}});
    if(xs.length>=3&&(!anchors||xs.length>anchors.xs.length||(xs.length===anchors.xs.length&&ki<anchors.k)))anchors={xs,cs,k:ki,li:+li}})});
  KEYS.slice(0,2).forEach(re=>{W.forEach(w=>{if(re.test(norm(w.t)))topY=Math.max(topY,w.y1)})});
@@ -1333,6 +1333,9 @@ function ocrToBlock(data){const W=[];(data.lines||[]).forEach((ln,li)=>(ln.words
  else if(anchors){let xs=anchors.xs.slice();const dif=xs.slice(1).map((x,i)=>x-xs[i]).sort((a,b)=>a-b);const med=dif[Math.floor(dif.length/2)];
   // si un rótulo va centrado (no alineado a la izquierda), su x0 queda corrido: lo corrijo con el ancho típico de columna
   for(let i=1;i<xs.length;i++){const d=xs[i]-xs[i-1];if(Math.abs(d-med)>med*.2)xs[i]=xs[i-1]+med}
+  // la planilla dice "5 DIAS" pero leí menos columnas: agrego las que faltan si hay texto más a la derecha
+  {const em=/(\d)\s*d[ií1l]as/i.exec(W.filter(w=>w.cy<(topY<0?lineY(anchors.li)[0]:topY)).sort((a,b)=>a.li-b.li||a.x0-b.x0).map(w=>w.t).join(' '));const exp=em?+em[1]:0;const maxX=Math.max(...W.map(w=>w.x1));
+   while(exp&&xs.length<exp&&maxX>xs[xs.length-1]+med*1.2)xs.push(xs[xs.length-1]+med)}
   const gap=med;const tol=gap*.12;cols=xs.map((x,i)=>({n:i+1,a:x-tol,b:i<xs.length-1?xs[i+1]-tol:x+gap*1.6,by:'x0'}))}
  else return null;
  if(topY<0&&anchors)topY=lineY(anchors.li)[1];
