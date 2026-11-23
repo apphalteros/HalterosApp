@@ -1352,8 +1352,12 @@ const pxTitle=s=>String(s||'').toLowerCase().replace(/(^|[\s(\/])([a-záéíóú
 const PX_LINECONT=new Set(['x','al','fallo','c/u','cu','pies','pie','brazo','brazos','pierna','piernas','seg','segundos','abajo','mantener','rondas','ronda','velocidad)','velocidad','min','minutos','lado','lados']);
 const PX_NUMCONT=new Set(['rondas','ronda','min','minutos','seg','segundos','pies','pie','x','reps','series','vueltas']);
 function pxDay(text){const items=[];let cur=null;const push=()=>{if(cur&&(cur.name.length||cur.sch.length)){const name=pxTitle(cur.name.join(' ').replace(/\s+/g,' ').trim()||'Ejercicio');items.push({name,scheme:cur.sch.join(' ').trim(),base:detectEx(name)})}cur=null};
- const toks=String(text||'').replace(/\r/g,'').split('\n').map(l=>l.trim()).filter(l=>l&&!/^(calentamiento|movilidad|e?stiramiento|n[°º]?\s*sesi)/i.test(l)&&!/^\W{0,3}\w{0,3}\s*\w*(miento|uiento)\s+con$/i.test(l)&&!/^\d{1,2}$/.test(l)).join(' | ').split(/\s+/).filter(Boolean).flatMap(t=>{const m=/^(\d+)[a-z]?x?(rondas?)$/i.exec(t);return m?[m[1],m[2]]:[t]}).filter(t=>t==='|'||!/^[\[\]{}()|_\u2014\u2013\-.,;:'"`~]+$/.test(t));
- let br=false;for(let i=0;i<toks.length;i++){const t=toks[i];if(t==='|'){br=true;continue}const n=norm(t).replace(/[.,:;]+$/,'');
+ const toks=String(text||'').replace(/\r/g,'').split('\n').map(l=>l.trim()).filter(l=>l&&!/^(calentamiento|movilidad|n[°º]?\s*sesi)/i.test(l)&&!/^e?stiramiento\W*$/i.test(l)&&!/^\W{0,3}\w{0,3}\s*\w*(miento|uiento)\s+con$/i.test(l)&&!/^\d{1,2}$/.test(l)).join(' | ').split(/\s+/).filter(Boolean).flatMap(t=>{const m=/^(\d+)[a-z]?x?(rondas?)$/i.exec(t);if(m)return[m[1],m[2]];if(/^[aA][xX]\d{1,3}$/.test(t))return['4'+t.slice(1)];return[t]}).filter(t=>t==='|'||!/^[\[\]{}()|_\u2014\u2013\-.,;:'"`~]+$/.test(t));
+ let br=false,tail=false;for(let i=0;i<toks.length;i++){const t=toks[i];if(t==='|'){br=true;tail=false;continue}const n=norm(t).replace(/[.,:;]+$/,'');
+  // «85 % mover con velocidad», «4x3 90%»: el % y lo que sigue en la línea es parte del esquema
+  if(cur&&cur.sch.length&&(t==='%'||/^\d{2,3}%$/.test(t))){cur.sch.push(t);tail=true;br=false;continue}
+  if(tail&&!br&&cur){cur.sch.push(t.toLowerCase());continue}tail=false;
+  if(cur&&cur.sch.length&&n==='de'&&/^\d+$/.test(toks[i+1]||'')){cur.sch.push('de');br=false;continue}
   if(pxIsPct(t)||pxIsSR(t)){if(!cur)cur={name:[],sch:[]};cur.sch.push(t.replace(/X/,'x'));br=false;continue}
   if(/^\d+$/.test(t)){let j=i+1;while(toks[j]==='|')j++;const nx=norm(toks[j]||'').replace(/[.,:;]+$/,'');
    if(cur&&(cur.sch.length||PX_NUMCONT.has(nx))){cur.sch.push(t);br=false;continue}
@@ -1394,8 +1398,8 @@ function ocrToBlock(data){const W=[];(data.lines||[]).forEach((ln,li)=>(ln.words
   if(/^d[i1l]a$/.test(n)){const nx=W.find(v=>v.li===w.li&&v.x0>w.x1&&v.x0-w.x1<(w.x1-w.x0)*1.5&&/^\d$/.test(v.t));if(nx)H.push({n:+nx.t,cx:(w.x0+nx.x1)/2,y:Math.max(w.y1,nx.y1),li:w.li})}});
  const byN={};H.forEach(h=>{if(!byN[h.n]||h.y<byN[h.n].y)byN[h.n]=h});let hs=Object.values(byN).sort((a,b)=>a.cx-b.cx);
  // 2) si no se leen, usar filas repetidas por columna: N° sesión, calentamiento, estiramiento (alineadas a la izquierda)
- const KEYS=[/(ses[i1l]|seso?n$|sesion|sion:?$)/,/(calent|carent|camen|caent|cament|movil|moviu)/,/(stiram|smgam|smmam|smnam|ramient|estir)/];let anchors=null,topY=hs.length?Math.max(...hs.map(h=>h.y)):-1;
- KEYS.forEach((re,ki)=>{const g={};W.forEach(w=>{if(re.test(norm(w.t)))(g[w.li]=g[w.li]||[]).push(w)});Object.entries(g).forEach(([li,v])=>{v.sort((a,b)=>a.x0-b.x0);const xs=[],cs=[];v.forEach(w=>{if(!xs.length||w.x0-xs[xs.length-1]>40){xs.push(w.x0);cs.push(w.cx)}});
+ const KEYS=[/(ses[i1l]|seso?n$|sesion|sion$|seson|sesn$)/,/(calent|carent|camen|caent|cament|movil|moviu)/,/(stiram|smgam|smmam|smnam|ramient|estir)/];let anchors=null,topY=hs.length?Math.max(...hs.map(h=>h.y)):-1;
+ KEYS.forEach((re,ki)=>{const g={};W.forEach(w=>{if(re.test(norm(w.t).replace(/[^a-z0-9]/g,'')))(g[w.li]=g[w.li]||[]).push(w)});Object.entries(g).forEach(([li,v])=>{v.sort((a,b)=>a.x0-b.x0);const xs=[],cs=[];v.forEach(w=>{if(!xs.length||w.x0-xs[xs.length-1]>40){xs.push(w.x0);cs.push(w.cx)}});
    if(xs.length>=3&&(!anchors||xs.length>anchors.xs.length||(xs.length===anchors.xs.length&&ki<anchors.k)))anchors={xs,cs,k:ki,li:+li}})});
  KEYS.slice(0,2).forEach(re=>{W.forEach(w=>{if(re.test(norm(w.t)))topY=Math.max(topY,w.y1)})});
  let cols;
