@@ -1068,8 +1068,9 @@ A.delTrial=async k=>{if(S.confirm!=='tr'+k){S.confirm='tr'+k;setTimeout(()=>{if(
 const capDef=()=>+agCfg().cap||10;
 A.saveAg=async()=>{const v=Math.max(0,Math.min(72,+($('#agh')||{}).value||0));const cut=+(($('#agcut')||{}).value??22);const cap=Math.max(1,Math.min(60,+(($('#agcap')||{}).value)||capDef()));const capCh=cap!==capDef();
  if(!await put('config/agenda_'+S.me.id,{...agCfg(),cancelH:v||null,cutoff:cut,cap,minCap:Math.max(0,+(($('#agmin')||{}).value??3)),coach:S.me.id}))return;
- let n=0;if(capCh){const t=ymd();const it=Object.entries(S.slots).filter(([i,x])=>x.date>=t&&(x.coach||S.me.id)===S.me.id&&x.cap!=null&&x.cap!==cap).map(([i,x])=>({path:'slots/'+i,data:{...clone(x),cap}}));n=it.length;if(n&&!await putMany(it))return}
- toast(capCh?`Cupos: ${cap} por clase · ${n} clases actualizadas`:(cut<0?'Reservas sin cierre':'Reservas hasta las '+cut+':00 del día anterior'))};
+ const t=ymd();const diff=Object.values(S.slots).some(x=>x.date>=t&&x.cap!==cap);let r=null;
+ if(capCh||diff){S.saving=true;toast('Actualizando cupos…');try{r=await call('setCap',{cap});await refresh()}catch(e){S.saving=false;return errToast(e)}S.saving=false}
+ toast((cut<0?'Reservas sin cierre':'Reservas hasta las '+cut+':00')+` · ${cap} cupos por clase`+(r&&r.updated?` · ${r.updated} clases actualizadas`:'')+(r&&r.dup?` · ${r.dup} duplicadas borradas`:''));render()};
 A.waitT=async id=>{const me=S.me.id;const b=clone(S.bookings[me])||{slots:[]};const t=ymd();b.wait=(b.wait||[]).filter(x=>S.slots[x]&&S.slots[x].date>=t);
  if(b.wait.includes(id)){b.wait=b.wait.filter(x=>x!==id);if(await put('bookings/'+me,b))toast('Saliste de la lista de espera')}
  else{if(slotClosed(S.slots[id]))return toast('Las reservas para ese día ya cerraron');b.wait.push(id);if(await put('bookings/'+me,b))toast('Estás en lista de espera. Si se libera un cupo te avisamos en Hoy.')}};
