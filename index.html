@@ -318,7 +318,7 @@ const MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','
 function ageOf(a){if(!a)return null;if(a.dob){const b=dt(a.dob),n=new Date();let y=n.getFullYear()-b.getFullYear();if(n.getMonth()<b.getMonth()||(n.getMonth()===b.getMonth()&&n.getDate()<b.getDate()))y--;return y}return age(a.by)}
 const isBday=a=>a&&a.dob&&a.dob.slice(5)===ymd().slice(5);
 function dobTxt(v){if(!v.by)return'';if(!v.bd||!v.bm)return`Año ${v.by} · categoría ${ageGroup(v.by)}`;const d=new Date(v.by,v.bm-1,v.bd);if(d.getMonth()!==v.bm-1)return'<span style="color:var(--bad)">Esa fecha no existe</span>';const ds=ymd(d);return`${ageOf({dob:ds})} años · categoría ${ageGroup(v.by)}`}
-function ageGroup(by){const a=age(by);if(a==null)return'Edad sin dato';if(a<=14)return'Sub-15';if(a<=17)return'Juvenil';if(a<=20)return'Junior';if(a>=35)return'Máster';return'Senior'}
+function ageGroup(by){const a=age(by);if(a==null)return'Edad sin dato';if(a<=10)return'Sub-10';if(a<=12)return'Sub-12';if(a<=14)return'Sub-15';if(a<=17)return'Juvenil';if(a<=20)return'Junior';if(a>=35)return'Máster';return'Senior'}
 function catInfo(a){if(!a||!a.sex||!a.bw)return null;const ag=age(a.by);const L=CATS[a.sex][ag!=null&&ag<=17?'you':'sen'];for(const c of L)if(a.bw<=c)return{label:c+' kg',limit:c};return{label:'+'+L[L.length-1]+' kg',limit:null}}
 function sinclair(total,bw,sex){if(!total||!bw||!sex)return null;const A=sex==='F'?0.787004341:0.722762521,b=sex==='F'?153.757:193.609;if(bw>=b)return total;return total*Math.pow(10,A*Math.pow(Math.log10(bw/b),2))}
 const rnd=(x,step)=>{step=step||1;return Math.round(x/step)*step};
@@ -1102,7 +1102,10 @@ function athSummary(id,a){const t=ymd();const r=rmsX(a);const tot=(r.arranque||0
  const I=insights(id)||{W:[],F:[]};const W=I.W.slice().sort((x,y)=>y.p-x.p);
  return{tot,sin:tot&&a.bw?sinclair(tot,a.bw,a.sex):null,gain:has?Math.round(gain*10)/10:null,days,asis,last,W,F:I.F,pri:W.length?W[0].p:0}}
 A.rsSort=k=>{S.rsSort=k;render()};
-function vResumen(){const L=athleteList().filter(([u])=>u[0]!=='c');const k=S.rsSort||'pri';
+A.rsF=(k,v)=>{S[k]=v;render()};
+function vResumen(){const L0=athleteList().filter(([u])=>u[0]!=='c');const k=S.rsSort||'pri';const sx=S.rsSex||'all',ag=S.rsAge||'all';
+ const AG=[...new Set(L0.map(([u,a])=>ageGroup(a.by)))];const ORD=['Sub-10','Sub-12','Sub-15','Juvenil','Junior','Senior','Máster','Edad sin dato'];AG.sort((p,q)=>(ORD.indexOf(p)<0?50:ORD.indexOf(p))-(ORD.indexOf(q)<0?50:ORD.indexOf(q))||p.localeCompare(q));
+ const L=L0.filter(([u,a])=>(sx==='all'||a.sex===sx)&&(ag==='all'||ageGroup(a.by)===ag));
  const rows=L.map(([id,a])=>({id,a,x:athSummary(id,a)}));
  const by={nom:(p,q)=>(p.a.name||'').localeCompare(q.a.name||''),tot:(p,q)=>q.x.tot-p.x.tot,prog:(p,q)=>(q.x.gain??-1e9)-(p.x.gain??-1e9),ent:(p,q)=>(q.a.ext?q.x.days:q.x.asis+q.x.days)-(p.a.ext?p.x.days:p.x.asis+p.x.days),pri:(p,q)=>q.x.pri-p.x.pri||q.x.W.length-p.x.W.length};
  rows.sort(by[k]||by.pri);
@@ -1110,8 +1113,11 @@ function vResumen(){const L=athleteList().filter(([u])=>u[0]!=='c');const k=S.rs
  const avg=(f)=>{const v=rows.map(f).filter(x=>x!=null&&!isNaN(x));return v.length?v.reduce((s,x)=>s+x,0)/v.length:null};
  const act=rows.filter(r=>r.x.days>0||r.x.asis>0).length,up=rows.filter(r=>r.x.gain>0).length,urg=rows.filter(r=>r.x.pri>=3).length;
  let h=`<button class="back" onclick="A.tab('team')">‹ Equipo</button><h1>📊 Resumen del equipo</h1><div class="sm mut" style="margin-bottom:10px">Progreso, características y qué mejorar de cada atleta · últimas 4 semanas y 3 meses</div>`;
+ h+=`<div class="seg" style="margin-bottom:10px">${[['all','Ambos'],['M','Hombres'],['F','Mujeres']].map(([v,l])=>`<button class="${sx===v?'on':''}" onclick="A.rsF('rsSex','${v}')">${l} (${v==='all'?L0.length:L0.filter(([u,a])=>a.sex===v).length})</button>`).join('')}</div>`;
  h+=`<div class="grid2" style="grid-template-columns:repeat(3,1fr);margin-bottom:12px"><div class="stat"><div class="l">Activos (4 sem.)</div><div class="v">${act}<span class="xs mut"> / ${rows.length}</span></div></div><div class="stat"><div class="l">Subieron marcas (3 m.)</div><div class="v">${up}</div></div><div class="stat"><div class="l">Con algo urgente</div><div class="v" style="color:${urg?'var(--bad,#e3262e)':'inherit'}">${urg}</div></div></div>`;
  h+=`<div class="seg" style="flex-wrap:wrap;margin-bottom:4px">${[['pri','Prioridad'],['nom','Nombre'],['tot','Total'],['prog','Progreso'],['ent','Entrenos']].map(([x,l])=>`<button class="${k===x?'on':''}" onclick="A.rsSort('${x}')">${l}</button>`).join('')}</div>${athSearch('rs','Buscar atleta…')}`;
+ h+=`<div class="xs mut" style="margin:6px 0 4px">Categoría de edad</div><div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:10px">${['all',...AG].map(v=>`<button class="btn sm ${ag===v?'':'ghost'}" style="padding:6px 12px" onclick="A.rsF('rsAge','${esc(v)}')">${v==='all'?'Todas':esc(v)} (${L0.filter(([u,a])=>(sx==='all'||a.sex===sx)&&(v==='all'||ageGroup(a.by)===v)).length})</button>`).join('')}</div>`;
+ if(!rows.length)h+=`<div class="card" style="text-align:center"><div class="mut">No hay atletas con esos filtros.</div></div>`;
  h+=`<div id="rs">${rows.map(({id,a,x})=>{const ci=catInfo(a);const lastTxt=x.last?(daysUntil(x.last)===0?'hoy':'hace '+(-daysUntil(x.last))+' d'):'nunca';
   return`<div class="card cc" data-n="${esc(a.name||'')}" style="--cc:${avc(a.name)};padding:12px 14px;cursor:pointer;${athHit('rs',a.name||'')?'':'display:none'}" onclick="A.open('athlete','${id}')">
   <div class="row" style="gap:10px;align-items:center"><div class="av" style="background:${avc(a.name)}26;color:${avc(a.name)}">${esc(initials(a.name))}</div><div class="f1"><div class="b">${esc(a.name)}${a.ext?' <span class="pill blue">🏠 fuera</span>':''}</div><div class="xs mut">${[a.sex==='F'?'Femenino':a.sex==='M'?'Masculino':'',ci?'Cat. '+ci.label:'',a.bw?fk(a.bw)+' kg':'',freqOf(id)?freqOf(id)+' días/sem':'',ageGroup(a.by)].filter(Boolean).join(' · ')}</div></div><span class="mut" style="font-size:22px">›</span></div>
