@@ -1283,7 +1283,7 @@ const pxTitle=s=>String(s||'').toLowerCase().replace(/(^|[\s(\/])([a-záéíóú
 const PX_LINECONT=new Set(['x','al','fallo','c/u','cu','pies','pie','brazo','brazos','pierna','piernas','seg','segundos','abajo','mantener','rondas','ronda','velocidad)','velocidad','min','minutos','lado','lados']);
 const PX_NUMCONT=new Set(['rondas','ronda','min','minutos','seg','segundos','pies','pie','x','reps','series','vueltas']);
 function pxDay(text){const items=[];let cur=null;const push=()=>{if(cur&&(cur.name.length||cur.sch.length)){const name=pxTitle(cur.name.join(' ').replace(/\s+/g,' ').trim()||'Ejercicio');items.push({name,scheme:cur.sch.join(' ').trim(),base:detectEx(name)})}cur=null};
- const toks=String(text||'').replace(/\r/g,'').split('\n').map(l=>l.trim()).filter(l=>l&&!/^(calentamiento|movilidad|e?stiramiento|n[°º]?\s*sesi)/i.test(l)&&!/^\d{1,2}$/.test(l)).join(' | ').split(/\s+/).filter(Boolean);
+ const toks=String(text||'').replace(/\r/g,'').split('\n').map(l=>l.trim()).filter(l=>l&&!/^(calentamiento|movilidad|e?stiramiento|n[°º]?\s*sesi)/i.test(l)&&!/^\W{0,3}\w{0,3}\s*\w*(miento|uiento)\s+con$/i.test(l)&&!/^\d{1,2}$/.test(l)).join(' | ').split(/\s+/).filter(Boolean);
  let br=false;for(let i=0;i<toks.length;i++){const t=toks[i];if(t==='|'){br=true;continue}const n=norm(t).replace(/[.,:;]+$/,'');
   if(pxIsPct(t)||pxIsSR(t)){if(!cur)cur={name:[],sch:[]};cur.sch.push(t.replace(/X/,'x'));br=false;continue}
   if(/^\d+$/.test(t)){let j=i+1;while(toks[j]==='|')j++;const nx=norm(toks[j]||'').replace(/[.,:;]+$/,'');
@@ -1325,12 +1325,15 @@ function ocrToBlock(data){const W=[];(data.lines||[]).forEach((ln,li)=>(ln.words
  const byN={};H.forEach(h=>{if(!byN[h.n]||h.y<byN[h.n].y)byN[h.n]=h});let hs=Object.values(byN).sort((a,b)=>a.cx-b.cx);
  // 2) si no se leen, usar filas repetidas por columna: N° sesión, calentamiento, estiramiento (alineadas a la izquierda)
  const KEYS=[/ses[i1l]/,/(calent|carent|camen|caent|cament|movil|moviu)/,/(stiram|smgam|smmam|smnam|ramient|estir)/];let anchors=null,topY=hs.length?Math.max(...hs.map(h=>h.y)):-1;
- KEYS.forEach((re,ki)=>{const g={};W.forEach(w=>{if(re.test(norm(w.t)))(g[w.li]=g[w.li]||[]).push(w)});Object.entries(g).forEach(([li,v])=>{v.sort((a,b)=>a.x0-b.x0);const xs=[];v.forEach(w=>{if(!xs.length||w.x0-xs[xs.length-1]>40)xs.push(w.x0)});
-   if(xs.length>=3&&(!anchors||xs.length>anchors.xs.length||(xs.length===anchors.xs.length&&ki<anchors.k)))anchors={xs,k:ki,li:+li}})});
+ KEYS.forEach((re,ki)=>{const g={};W.forEach(w=>{if(re.test(norm(w.t)))(g[w.li]=g[w.li]||[]).push(w)});Object.entries(g).forEach(([li,v])=>{v.sort((a,b)=>a.x0-b.x0);const xs=[],cs=[];v.forEach(w=>{if(!xs.length||w.x0-xs[xs.length-1]>40){xs.push(w.x0);cs.push(w.cx)}});
+   if(xs.length>=3&&(!anchors||xs.length>anchors.xs.length||(xs.length===anchors.xs.length&&ki<anchors.k)))anchors={xs,cs,k:ki,li:+li}})});
  KEYS.slice(0,2).forEach(re=>{W.forEach(w=>{if(re.test(norm(w.t)))topY=Math.max(topY,w.y1)})});
  let cols;
  if(hs.length>=3&&(!anchors||hs.length>=anchors.xs.length)){const gap=(hs[hs.length-1].cx-hs[0].cx)/(hs.length-1);cols=hs.map((h,i)=>({n:h.n,a:i?(hs[i-1].cx+h.cx)/2:h.cx-gap/2,b:i<hs.length-1?(h.cx+hs[i+1].cx)/2:h.cx+gap/2,by:'cx'}))}
- else if(anchors){const xs=anchors.xs;const gap=(xs[xs.length-1]-xs[0])/(xs.length-1);const tol=gap*.12;cols=xs.map((x,i)=>({n:i+1,a:x-tol,b:i<xs.length-1?xs[i+1]-tol:x+gap,by:'x0'}))}
+ else if(anchors){let xs=anchors.xs.slice();const dif=xs.slice(1).map((x,i)=>x-xs[i]).sort((a,b)=>a-b);const med=dif[Math.floor(dif.length/2)];
+  // si un rótulo va centrado (no alineado a la izquierda), su x0 queda corrido: lo corrijo con el ancho típico de columna
+  for(let i=1;i<xs.length;i++){const d=xs[i]-xs[i-1];if(Math.abs(d-med)>med*.2)xs[i]=xs[i-1]+med}
+  const gap=med;const tol=gap*.12;cols=xs.map((x,i)=>({n:i+1,a:x-tol,b:i<xs.length-1?xs[i+1]-tol:x+gap*1.6,by:'x0'}))}
  else return null;
  if(topY<0&&anchors)topY=lineY(anchors.li)[1];
  const est=W.filter(w=>w.cy>topY&&/(stiram|smgam|smmam|smnam|ramient)/.test(norm(w.t))).sort((a,b)=>a.cy-b.cy)[0];const bot=est?est.y0-2:Infinity;
@@ -1342,7 +1345,7 @@ function ocrToBlock(data){const W=[];(data.lines||[]).forEach((ln,li)=>(ln.words
  const note=est?[...new Set(W.filter(w=>w.cy>est.y1+3).map(w=>w.li))].map(lineTxt).map(t=>t.replace(/^\s*\d{3,5}\s+/,'').trim()).find(t=>t.length>12&&!/stiram|smgam|ramient/i.test(t))||'':'';
  if(!days.length)return null;
  const rows=[{c:[title]},{c:cols.map(c=>'DIA '+c.n)},{c:cols.map(c=>(days.find(d=>d.n===c.n)||{}).text||'')},{c:cols.map(()=>'ESTIRAMIENTO')},{c:[note]}];
- return{sheet:'Foto',title,week:pxWeek(title),note,days,rows}}
+ const em=/(\d)\s*d[ií1l]as/i.exec(above.join(' '));return{sheet:'Foto',title,week:pxWeek(title),note,days,rows,exp:em?+em[1]:0}}
 
 function loadTess(){if(window.Tesseract)return Promise.resolve();return new Promise((res,rej)=>{const sc=document.createElement('script');sc.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';sc.onload=()=>res();sc.onerror=()=>rej(new Error('No se pudo cargar el lector de fotos. Revisa tu conexión.'));document.head.appendChild(sc)})}
 async function prepImg(file){const url=URL.createObjectURL(file);try{const img=new Image();img.src=url;await img.decode();const k=Math.min(3,Math.max(1,2000/img.naturalWidth));const c=document.createElement('canvas');c.width=Math.round(img.naturalWidth*k);c.height=Math.round(img.naturalHeight*k);const x=c.getContext('2d');x.filter='grayscale(1) contrast(1.35)';x.drawImage(img,0,0,c.width,c.height);return c}finally{URL.revokeObjectURL(url)}}
@@ -1350,7 +1353,8 @@ A.ocrPlan=async()=>{const d=S.draft;const f=S.ocrFile;if(!d||!f)return toast('Vu
  try{await loadTess();const c=await prepImg(f);const w=await Tesseract.createWorker('spa',1,{logger:m=>{if(m.status==='recognizing text'){S.ocr='Leyendo la foto… '+Math.round(m.progress*100)+'%';const e=$('#ocrst');if(e)e.textContent=S.ocr}}});
   const {data}=await w.recognize(c,{},{blocks:true});await w.terminate();const lines=[];(data.blocks||[]).forEach(b=>(b.paragraphs||[]).forEach(p=>(p.lines||[]).forEach(l=>lines.push(l))));
   const B=ocrToBlock({lines});S.ocr=null;if(!B){render();return toast('No pude encontrar la grilla de días en la foto. Prueba con una foto más nítida o sube el Excel.')}
-  d._blocks=[B];A.pickBlock(0);toast('📷 Leí '+B.days.length+' días y '+B.days.reduce((n,x)=>n+x.items.length,0)+' ejercicios. Revísalos antes de publicar.')}
+  d._blocks=[B];A.pickBlock(0);if(B.exp&&!d.freq&&d.assign==='all'&&B.exp>=3&&B.exp<=5){d.freq=B.exp;if(!d.title||d._autoTitle)d.title='Semana del '+fmtD(d.week)+' · '+B.exp+' días';render()}
+  toast(B.exp&&B.days.length<B.exp?`⚠️ La planilla dice ${B.exp} días pero solo pude leer ${B.days.length}. Revisa las sesiones o sube el Excel.`:'📷 Leí '+B.days.length+' días y '+B.days.reduce((n,x)=>n+x.items.length,0)+' ejercicios. Revísalos antes de publicar.')}
  catch(e){S.ocr=null;render();toast(e.message||'No se pudo leer la foto')}};
 /* ===================== logros ===================== */
 /* Logros por niveles: 🥉 bronce · 🥈 plata · 🥇 oro · 💎 diamante. Las metas de fuerza son distintas para hombres y mujeres. */
